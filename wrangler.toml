@@ -1,0 +1,12 @@
+name = "api-prod"
+
+# Основной entry point
+main = "src/index.js"
+
+# Обязательно ставь актуальную дату!
+compatibility_date = "2026-04-08"
+compatibility_flags = ["nodejs_compat"]
+
+# Для test ветки — отдельное окружение
+[env.test]
+name = "api-test"
