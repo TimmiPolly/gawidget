@@ -10,26 +10,37 @@ export async function googleAuthenticatorHandler(request: Request): Promise<Resp
       });
     }
 
-    // Формируем URL точно как в curl
+    // Формируем URL
     const apiUrl = `https://api-test.free2ex.com/v3/Identity/GoogleAuthenticator?sendNotification=false&token=${encodeURIComponent(token)}`;
 
-    console.log("→ Запрос к API:", apiUrl);
-
-    const response = await fetch(apiUrl, {
+    const fetchOptions = {
       method: "GET",
       headers: {
         "Accept": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", // более «человеческий»
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
         "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
       },
-    });
+    };
 
-    console.log("← Статус от API:", response.status);
+    // === ПОДРОБНОЕ ЛОГИРОВАНИЕ ЗАПРОСА ===
+    console.log("=== ЗАПРОС К API ===");
+    console.log("URL:", apiUrl);
+    console.log("Method:", fetchOptions.method);
+    console.log("Headers:", JSON.stringify(fetchOptions.headers, null, 2));
+    console.log("=====================");
+
+    const response = await fetch(apiUrl, fetchOptions);
+
+    console.log("=== ОТВЕТ ОТ API ===");
+    console.log("Status:", response.status);
+    console.log("Status Text:", response.statusText);
+    console.log("=====================");
 
     if (!response.ok) {
       const errorBody = await response.text();
-      console.error("Ошибка API:", errorBody);
-      return new Response(`API вернул ошибку ${response.status}: ${errorBody}`, { 
+      console.error("Тело ошибки:", errorBody);
+      return new Response(`API вернул ошибку ${response.status}`, { 
         status: 502,
         headers: { "Content-Type": "text/plain; charset=utf-8" }
       });
@@ -38,13 +49,10 @@ export async function googleAuthenticatorHandler(request: Request): Promise<Resp
     const data = await response.json() as any;
 
     if (!data?.key) {
-      return new Response("API не вернул ключ Google Authenticator", { 
-        status: 500,
-        headers: { "Content-Type": "text/plain; charset=utf-8" }
-      });
+      return new Response("API не вернул ключ", { status: 500 });
     }
 
-    // Красивая HTML-страница
+    // HTML-страница
     const html = `
 <!DOCTYPE html>
 <html lang="ru">
@@ -85,7 +93,7 @@ export async function googleAuthenticatorHandler(request: Request): Promise<Resp
     <h1>Google Authenticator</h1>
     <p>Ваш секретный ключ:</p>
     <div class="key-box">${data.key}</div>
-    <p>Скопируйте этот ключ и добавьте в приложение<br>Google Authenticator</p>
+    <p>Скопируйте этот ключ и добавьте в приложение Google Authenticator</p>
   </div>
 </body>
 </html>`;
@@ -95,10 +103,7 @@ export async function googleAuthenticatorHandler(request: Request): Promise<Resp
     });
 
   } catch (err: any) {
-    console.error("Ошибка:", err);
-    return new Response("Внутренняя ошибка Worker: " + err.message, { 
-      status: 500,
-      headers: { "Content-Type": "text/plain; charset=utf-8" }
-    });
+    console.error("Критическая ошибка в handler:", err);
+    return new Response("Внутренняя ошибка Worker", { status: 500 });
   }
 }
