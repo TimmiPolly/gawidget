@@ -1,12 +1,18 @@
 name = "api-prod"
 
-# Основной entry point
-main = "src/index.js"
-
-# Обязательно ставь актуальную дату!
+main = "src/index.ts"
 compatibility_date = "2026-04-08"
 compatibility_flags = ["nodejs_compat"]
 
-# Для test ветки — отдельное окружение
+# KV Namespace для production
+[[kv_namespaces]]
+binding = "MY_KV"
+id = "ваш_production_kv_id"     # ← замени
+
+# Test environment
 [env.test]
 name = "api-test"
+
+[[env.test.kv_namespaces]]
+binding = "MY_KV"
+id = "ваш_test_kv_id"           # ← замени на другой KV
