@@ -53,46 +53,418 @@ export async function googleAuthenticatorHandler(request: Request): Promise<Resp
       const errorText = await response.text();
       debugInfo.error = errorText;
       console.error("Ошибка API:", errorText);
-      return createDebugPage(debugInfo);
+      return createDebugPage(debugInfo, true);
     }
 
     const data = await response.json() as any;
-    return createSuccessPage(data.key || "Ключ не получен");
+    const secretKey = data.key || "Ключ не получен";
+    
+    return createSuccessPage(secretKey);
 
   } catch (err: any) {
     debugInfo.error = err.message || String(err);
     console.error(err);
-    return createDebugPage(debugInfo);
+    return createDebugPage(debugInfo, true);
   }
 }
 
 function createSuccessPage(key: string): Response {
+  // Создаем otpauth URL для Google Authenticator
+  const otpauthUrl = `otpauth://totp/Free2EX?secret=${key}&issuer=Free2EX`;
+  
   const html = `
 <!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Google Authenticator</title>
+  <title>Google Authenticator Setup</title>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap');
-    body { margin:0; height:100vh; display:flex; align-items:center; justify-content:center;
-           background:linear-gradient(135deg,#0f0c29,#302b63,#24243e); color:white; font-family:'Inter',sans-serif; }
-    .container { text-align:center; max-width:660px; padding:2rem; }
-    h1 { font-family:'Space Grotesk',sans-serif; font-size:3.8rem; margin:0 0 1rem 0;
-         background:linear-gradient(90deg,#22d3ee,#a78bfa); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
-    .key-box { background:rgba(255,255,255,0.08); border:2px solid #a78bfa; border-radius:16px; 
-               padding:1.8rem; font-size:1.6rem; letter-spacing:5px; word-break:break-all; margin:2rem 0; }
-    p { font-size:1.25rem; opacity:0.9; }
+    
+    * {
+      box-sizing: border-box;
+    }
+    
+    body { 
+      margin: 0; 
+      min-height: 100vh; 
+      display: flex; 
+      align-items: center; 
+      justify-content: center;
+      background: linear-gradient(135deg, #0f0c29, #302b63, #24243e); 
+      color: white; 
+      font-family: 'Inter', sans-serif;
+      padding: 20px;
+    }
+    
+    .container { 
+      max-width: 700px; 
+      padding: 2.5rem;
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(10px);
+      border-radius: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    h1 { 
+      font-family: 'Space Grotesk', sans-serif; 
+      font-size: 2.5rem; 
+      margin: 0 0 0.5rem 0;
+      background: linear-gradient(90deg, #22d3ee, #a78bfa); 
+      -webkit-background-clip: text; 
+      -webkit-text-fill-color: transparent;
+      text-align: center;
+    }
+    
+    .subtitle {
+      text-align: center;
+      opacity: 0.8;
+      margin-bottom: 2rem;
+      font-size: 1.1rem;
+    }
+    
+    .setup-section {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+      margin-bottom: 2rem;
+    }
+    
+    @media (max-width: 600px) {
+      .setup-section {
+        grid-template-columns: 1fr;
+      }
+    }
+    
+    .qr-section {
+      text-align: center;
+    }
+    
+    .qr-label {
+      font-size: 1rem;
+      margin-bottom: 1rem;
+      opacity: 0.9;
+    }
+    
+    #qrcode {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: white;
+      padding: 20px;
+      border-radius: 16px;
+      margin-bottom: 1rem;
+    }
+    
+    .manual-section {
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .key-box { 
+      background: rgba(0, 0, 0, 0.3); 
+      border: 2px solid #a78bfa; 
+      border-radius: 12px; 
+      padding: 1.2rem; 
+      font-size: 1.3rem; 
+      letter-spacing: 3px; 
+      word-break: break-all; 
+      margin: 1rem 0;
+      font-family: 'Courier New', monospace;
+      text-align: center;
+    }
+    
+    .copy-btn {
+      background: linear-gradient(90deg, #22d3ee, #a78bfa);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, opacity 0.2s;
+      margin-top: 0.5rem;
+    }
+    
+    .copy-btn:hover {
+      transform: scale(1.02);
+      opacity: 0.9;
+    }
+    
+    .verification-section {
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      padding-top: 2rem;
+      margin-top: 1rem;
+    }
+    
+    .verification-title {
+      font-size: 1.3rem;
+      margin-bottom: 1.5rem;
+      text-align: center;
+    }
+    
+    .code-input-container {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 1rem;
+    }
+    
+    .code-input {
+      background: rgba(0, 0, 0, 0.3);
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      padding: 16px 20px;
+      font-size: 2rem;
+      width: 200px;
+      text-align: center;
+      color: white;
+      font-family: 'Courier New', monospace;
+      letter-spacing: 8px;
+      outline: none;
+      transition: border-color 0.3s;
+    }
+    
+    .code-input:focus {
+      border-color: #a78bfa;
+    }
+    
+    .code-input.error {
+      border-color: #ff6b6b;
+      animation: shake 0.3s;
+    }
+    
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-10px); }
+      75% { transform: translateX(10px); }
+    }
+    
+    .verify-btn {
+      background: #a78bfa;
+      color: white;
+      border: none;
+      padding: 16px 32px;
+      border-radius: 12px;
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      min-width: 140px;
+    }
+    
+    .verify-btn:hover:not(:disabled) {
+      background: #8b6cf0;
+      transform: scale(1.02);
+    }
+    
+    .verify-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .verification-status {
+      text-align: center;
+      margin-top: 1rem;
+      min-height: 24px;
+    }
+    
+    .success-message {
+      color: #4ade80;
+    }
+    
+    .error-message {
+      color: #ff6b6b;
+    }
+    
+    .info-text {
+      font-size: 0.9rem;
+      opacity: 0.7;
+      margin-top: 0.5rem;
+    }
+    
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>Google Authenticator</h1>
-    <p>Ваш секретный ключ:</p>
-    <div class="key-box">${key}</div>
-    <p>Скопируйте ключ и добавьте в приложение Google Authenticator</p>
+    <h1>🔐 Google Authenticator</h1>
+    <p class="subtitle">Настройте двухфакторную аутентификацию</p>
+    
+    <div class="setup-section">
+      <div class="qr-section">
+        <div class="qr-label">📱 Отсканируйте QR-код</div>
+        <div id="qrcode"></div>
+        <p class="info-text">Используйте приложение Google Authenticator или любой другой TOTP-совместимый аутентификатор</p>
+      </div>
+      
+      <div class="manual-section">
+        <div class="qr-label">🔑 Или введите ключ вручную</div>
+        <div class="key-box" id="secretKey">${key}</div>
+        <button class="copy-btn" onclick="copySecretKey()">📋 Скопировать ключ</button>
+        <p class="info-text" style="margin-top: 1rem;">Выберите "Ввести ключ вручную" в приложении и вставьте этот код</p>
+      </div>
+    </div>
+    
+    <div class="verification-section">
+      <h3 class="verification-title">✅ Подтвердите настройку</h3>
+      <div style="text-align: center;">
+        <div class="code-input-container">
+          <input 
+            type="text" 
+            id="verificationCode" 
+            class="code-input" 
+            placeholder="000000" 
+            maxlength="6"
+            inputmode="numeric"
+            pattern="[0-9]*"
+            oninput="validateInput(this)"
+            onkeypress="return event.charCode >= 48 && event.charCode <= 57"
+          >
+          <button class="verify-btn" onclick="verifyCode()" id="verifyBtn">Проверить</button>
+        </div>
+        <div class="verification-status" id="status"></div>
+      </div>
+    </div>
   </div>
+
+  <script>
+    const secretKey = '${key}';
+    const otpauthUrl = '${otpauthUrl}';
+    
+    // Генерируем QR-код
+    window.onload = function() {
+      new QRCode(document.getElementById("qrcode"), {
+        text: otpauthUrl,
+        width: 200,
+        height: 200,
+        colorDark: "#000000",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.H
+      });
+    };
+    
+    function copySecretKey() {
+      navigator.clipboard.writeText(secretKey).then(() => {
+        const btn = event.target;
+        const originalText = btn.textContent;
+        btn.textContent = '✅ Скопировано!';
+        setTimeout(() => {
+          btn.textContent = originalText;
+        }, 2000);
+      }).catch(err => {
+        // Fallback для старых браузеров
+        const textArea = document.createElement("textarea");
+        textArea.value = secretKey;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        
+        const btn = event.target;
+        const originalText = btn.textContent;
+        btn.textContent = '✅ Скопировано!';
+        setTimeout(() => {
+          btn.textContent = originalText;
+        }, 2000);
+      });
+    }
+    
+    function validateInput(input) {
+      // Удаляем все нецифровые символы
+      input.value = input.value.replace(/[^0-9]/g, '');
+      
+      // Убираем класс ошибки при вводе
+      input.classList.remove('error');
+    }
+    
+    async function verifyCode() {
+      const input = document.getElementById('verificationCode');
+      const code = input.value;
+      const btn = document.getElementById('verifyBtn');
+      const status = document.getElementById('status');
+      
+      // Валидация
+      if (code.length !== 6) {
+        input.classList.add('error');
+        status.innerHTML = '<span class="error-message">❌ Введите 6 цифр</span>';
+        return;
+      }
+      
+      if (!/^\\d{6}$/.test(code)) {
+        input.classList.add('error');
+        status.innerHTML = '<span class="error-message">❌ Только цифры</span>';
+        return;
+      }
+      
+      // Показываем загрузку
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>';
+      status.innerHTML = '<span style="opacity: 0.8;">Проверка кода...</span>';
+      
+      try {
+        const response = await fetch('/verify-2fa', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
+            secret: secretKey,
+            code: code 
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (result.valid) {
+          status.innerHTML = '<span class="success-message">✅ Код верный! 2FA успешно настроена</span>';
+          input.classList.remove('error');
+          
+          // Можно добавить редирект или дополнительную логику
+          setTimeout(() => {
+            // window.location.href = '/success';
+          }, 1500);
+        } else {
+          input.classList.add('error');
+          status.innerHTML = '<span class="error-message">❌ Неверный код. Попробуйте снова</span>';
+        }
+      } catch (error) {
+        status.innerHTML = '<span class="error-message">❌ Ошибка проверки. Попробуйте позже</span>';
+        console.error('Verification error:', error);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Проверить';
+      }
+    }
+    
+    // Автофокус на поле ввода
+    document.addEventListener('DOMContentLoaded', function() {
+      document.getElementById('verificationCode').focus();
+    });
+    
+    // Обработка Enter
+    document.getElementById('verificationCode').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        verifyCode();
+      }
+    });
+  </script>
 </body>
 </html>`;
   
@@ -116,7 +488,7 @@ function createDebugPage(info: any, isError: boolean): Response {
 <body>
   <h1>${isError ? '❌ Ошибка' : 'Debug Info'}</h1>
   <pre>${JSON.stringify(info, null, 2)}</pre>
-  <p><a href="/">← На главную</a></p>
+  <p><a href="/" style="color: #a78bfa;">← На главную</a></p>
 </body>
 </html>`;
 
