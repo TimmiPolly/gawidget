@@ -1,78 +1,21 @@
-export async function googleAuthenticatorHandler(request: Request): Promise<Response> {
-  let debugInfo = {
-    requestUrl: request.url,
-    tokenLength: 0,
-    apiUrl: "",
-    status: null as number | null,
-    statusText: "",
-    error: "",
-    rawResponse: ""
-  };
-
-  // Проверяем метод запроса
-  if (request.method === 'POST' && request.url.includes('/enable-2fa')) {
-    return handleEnable2FA(request);
-  }
-
-  try {
+export default {
+  async fetch(request: Request, env: any, ctx: any): Promise<Response> {
     const url = new URL(request.url);
     
-    // ВАЖНО: Получаем сырой query string и извлекаем токен вручную
-    // чтобы избежать автоматического декодирования URL
-    const rawQueryString = request.url.split('?')[1] || '';
-    const tokenMatch = rawQueryString.match(/token=([^&]*)/);
-    let token = tokenMatch ? tokenMatch[1] : null;
-
-    if (!token) {
-      return new Response("Ошибка: token не передан", { status: 400 });
+    // Обработка POST запроса на /enable-2fa
+    if (url.pathname === '/enable-2fa' && request.method === 'POST') {
+      return handleEnable2FA(request);
     }
-
-    debugInfo.tokenLength = token.length;
-
-    // Декодируем токен только один раз, сохраняя все символы
-    token = decodeURIComponent(token);
     
-    // Кодируем заново для передачи в API
-    const apiUrl = `https://api-test.free2ex.com/v3/Identity/GoogleAuthenticator?sendNotification=false&token=${encodeURIComponent(token)}`;
-
-    debugInfo.apiUrl = apiUrl;
-
-    console.log("=== ЗАПРОС К API ===");
-    console.log("Token length:", token.length);
-    console.log("Original token preview:", token.substring(0, 50) + "...");
-    console.log("URL:", apiUrl);
-    console.log("=====================");
-
-    const response = await fetch(apiUrl, {
-      method: "GET",
-      headers: {
-        "Accept": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      },
-    });
-
-    debugInfo.status = response.status;
-    debugInfo.statusText = response.statusText;
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      debugInfo.error = errorText;
-      console.error("Ошибка API:", errorText);
-      return createDebugPage(debugInfo, true);
+    // Обработка GET запроса на /GoogleAuthenticator
+    if (url.pathname === '/GoogleAuthenticator' && request.method === 'GET') {
+      return googleAuthenticatorHandler(request);
     }
-
-    const data = await response.json() as any;
-    const secretKey = data.key || "Ключ не получен";
     
-    // Сохраняем оригинальный токен для последующего использования
-    return createSuccessPage(secretKey, token);
-
-  } catch (err: any) {
-    debugInfo.error = err.message || String(err);
-    console.error(err);
-    return createDebugPage(debugInfo, true);
+    // Для всех остальных запросов
+    return new Response('Not Found', { status: 404 });
   }
-}
+};
 
 async function handleEnable2FA(request: Request): Promise<Response> {
   try {
@@ -85,7 +28,10 @@ async function handleEnable2FA(request: Request): Promise<Response> {
         error: "Invalid code format" 
       }), {
         status: 400,
-        headers: { "Content-Type": "application/json" }
+        headers: { 
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*"
+        }
       });
     }
 
@@ -131,7 +77,10 @@ async function handleEnable2FA(request: Request): Promise<Response> {
         message: "2FA успешно включена!"
       }), {
         status: 200,
-        headers: { "Content-Type": "application/json" }
+        headers: { 
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*"
+        }
       });
     } else {
       return new Response(JSON.stringify({ 
@@ -140,7 +89,10 @@ async function handleEnable2FA(request: Request): Promise<Response> {
         details: responseData
       }), {
         status: response.status,
-        headers: { "Content-Type": "application/json" }
+        headers: { 
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*"
+        }
       });
     }
 
@@ -151,8 +103,95 @@ async function handleEnable2FA(request: Request): Promise<Response> {
       error: err.message || "Internal server error"
     }), {
       status: 500,
-      headers: { "Content-Type": "application/json" }
+      headers: { 
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*"
+      }
     });
+  }
+}
+
+// Добавьте обработку OPTIONS для CORS (если нужно)
+async function handleOptions(request: Request): Promise<Response> {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Max-Age": "86400"
+    }
+  });
+}
+
+// Ваша существующая функция googleAuthenticatorHandler
+export async function googleAuthenticatorHandler(request: Request): Promise<Response> {
+  let debugInfo = {
+    requestUrl: request.url,
+    tokenLength: 0,
+    apiUrl: "",
+    status: null as number | null,
+    statusText: "",
+    error: "",
+    rawResponse: ""
+  };
+
+  try {
+    const url = new URL(request.url);
+    
+    // ВАЖНО: Получаем сырой query string и извлекаем токен вручную
+    const rawQueryString = request.url.split('?')[1] || '';
+    const tokenMatch = rawQueryString.match(/token=([^&]*)/);
+    let token = tokenMatch ? tokenMatch[1] : null;
+
+    if (!token) {
+      return new Response("Ошибка: token не передан", { status: 400 });
+    }
+
+    debugInfo.tokenLength = token.length;
+
+    // Декодируем токен только один раз
+    token = decodeURIComponent(token);
+    
+    // Кодируем заново для передачи в API
+    const apiUrl = `https://api-test.free2ex.com/v3/Identity/GoogleAuthenticator?sendNotification=false&token=${encodeURIComponent(token)}`;
+
+    debugInfo.apiUrl = apiUrl;
+
+    console.log("=== ЗАПРОС К API ===");
+    console.log("Token length:", token.length);
+    console.log("Original token preview:", token.substring(0, 50) + "...");
+    console.log("URL:", apiUrl);
+    console.log("=====================");
+
+    const response = await fetch(apiUrl, {
+      method: "GET",
+      headers: {
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      },
+    });
+
+    debugInfo.status = response.status;
+    debugInfo.statusText = response.statusText;
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      debugInfo.error = errorText;
+      console.error("Ошибка API:", errorText);
+      return createDebugPage(debugInfo, true);
+    }
+
+    const data = await response.json() as any;
+    const secretKey = data.key || "Ключ не получен";
+    
+    // Сохраняем оригинальный токен для последующего использования
+    return createSuccessPage(secretKey, token);
+
+  } catch (err: any) {
+    debugInfo.error = err.message || String(err);
+    console.error(err);
+    return createDebugPage(debugInfo, true);
   }
 }
 
