@@ -15,3 +15,18 @@ name = "gawidget-test"   # или api-test, как хочешь
 [[env.test.kv_namespaces]]
 binding = "myVar"
 id = "01f999166da04c68a9a10b4e33cc132d"
+
+[observability]
+enabled = false
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[observability.traces]
+enabled = false
+persist = true
+head_sampling_rate = 1
