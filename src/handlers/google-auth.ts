@@ -9,6 +9,11 @@ export async function googleAuthenticatorHandler(request: Request): Promise<Resp
     rawResponse: ""
   };
 
+  // Проверяем метод запроса
+  if (request.method === 'POST' && request.url.includes('/enable-2fa')) {
+    return handleEnable2FA(request);
+  }
+
   try {
     const url = new URL(request.url);
     
@@ -59,7 +64,8 @@ export async function googleAuthenticatorHandler(request: Request): Promise<Resp
     const data = await response.json() as any;
     const secretKey = data.key || "Ключ не получен";
     
-    return createSuccessPage(secretKey);
+    // Сохраняем оригинальный токен для последующего использования
+    return createSuccessPage(secretKey, token);
 
   } catch (err: any) {
     debugInfo.error = err.message || String(err);
@@ -68,7 +74,89 @@ export async function googleAuthenticatorHandler(request: Request): Promise<Resp
   }
 }
 
-function createSuccessPage(key: string): Response {
+async function handleEnable2FA(request: Request): Promise<Response> {
+  try {
+    const body = await request.json() as { secret: string; code: string; token: string };
+    const { secret, code, token } = body;
+
+    if (!code || code.length !== 6 || !/^\d{6}$/.test(code)) {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: "Invalid code format" 
+      }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    const enableUrl = 'https://api-test.free2ex.com/v3/Identity/GoogleAuthenticator/Enable';
+    
+    const requestBody = {
+      isEnableClientFactor: true,
+      value: token,
+      code: code,
+      state: ""
+    };
+
+    console.log("=== ВКЛЮЧЕНИЕ 2FA ===");
+    console.log("Code:", code);
+    console.log("Token preview:", token.substring(0, 50) + "...");
+    console.log("=====================");
+
+    const response = await fetch(enableUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    const responseText = await response.text();
+    let responseData;
+    
+    try {
+      responseData = JSON.parse(responseText);
+    } catch {
+      responseData = { raw: responseText };
+    }
+
+    console.log("Response status:", response.status);
+    console.log("Response data:", responseData);
+
+    if (response.status === 200) {
+      return new Response(JSON.stringify({ 
+        success: true,
+        message: "2FA успешно включена!"
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    } else {
+      return new Response(JSON.stringify({ 
+        success: false,
+        error: responseData.error?.message || responseData.message || "Ошибка активации 2FA",
+        details: responseData
+      }), {
+        status: response.status,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+  } catch (err: any) {
+    console.error("Enable 2FA error:", err);
+    return new Response(JSON.stringify({ 
+      success: false,
+      error: err.message || "Internal server error"
+    }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" }
+    });
+  }
+}
+
+function createSuccessPage(key: string, originalToken: string): Response {
   // Создаем otpauth URL для Google Authenticator
   const otpauthUrl = `otpauth://totp/Free2EX?secret=${key}&issuer=Free2EX`;
   
@@ -254,7 +342,7 @@ function createSuccessPage(key: string): Response {
       font-weight: 600;
       cursor: pointer;
       transition: all 0.2s;
-      min-width: 140px;
+      min-width: 160px;
     }
     
     .verify-btn:hover:not(:disabled) {
@@ -275,10 +363,17 @@ function createSuccessPage(key: string): Response {
     
     .success-message {
       color: #4ade80;
+      font-weight: 500;
+      padding: 10px;
+      background: rgba(74, 222, 128, 0.1);
+      border-radius: 8px;
     }
     
     .error-message {
       color: #ff6b6b;
+      padding: 10px;
+      background: rgba(255, 107, 107, 0.1);
+      border-radius: 8px;
     }
     
     .info-text {
@@ -323,7 +418,7 @@ function createSuccessPage(key: string): Response {
     </div>
     
     <div class="verification-section">
-      <h3 class="verification-title">✅ Подтвердите настройку</h3>
+      <h3 class="verification-title">✅ Активируйте 2FA</h3>
       <div style="text-align: center;">
         <div class="code-input-container">
           <input 
@@ -337,7 +432,7 @@ function createSuccessPage(key: string): Response {
             oninput="validateInput(this)"
             onkeypress="return event.charCode >= 48 && event.charCode <= 57"
           >
-          <button class="verify-btn" onclick="verifyCode()" id="verifyBtn">Проверить</button>
+          <button class="verify-btn" onclick="enable2FA()" id="verifyBtn">Установить 2FA</button>
         </div>
         <div class="verification-status" id="status"></div>
       </div>
@@ -346,6 +441,7 @@ function createSuccessPage(key: string): Response {
 
   <script>
     const secretKey = '${key}';
+    const originalToken = '${originalToken.replace(/'/g, "\\'")}';
     const otpauthUrl = '${otpauthUrl}';
     
     // Генерируем QR-код
@@ -394,7 +490,7 @@ function createSuccessPage(key: string): Response {
       input.classList.remove('error');
     }
     
-    async function verifyCode() {
+    async function enable2FA() {
       const input = document.getElementById('verificationCode');
       const code = input.value;
       const btn = document.getElementById('verifyBtn');
@@ -415,41 +511,48 @@ function createSuccessPage(key: string): Response {
       
       // Показываем загрузку
       btn.disabled = true;
-      btn.innerHTML = '<span class="spinner"></span>';
-      status.innerHTML = '<span style="opacity: 0.8;">Проверка кода...</span>';
+      btn.innerHTML = '<span class="spinner"></span> Активация...';
+      status.innerHTML = '<span style="opacity: 0.8;">Включение 2FA...</span>';
       
       try {
-        const response = await fetch('/verify-2fa', {
+        const response = await fetch('/enable-2fa', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({ 
             secret: secretKey,
-            code: code 
+            code: code,
+            token: originalToken
           })
         });
         
         const result = await response.json();
         
-        if (result.valid) {
-          status.innerHTML = '<span class="success-message">✅ Код верный! 2FA успешно настроена</span>';
+        if (result.success) {
+          status.innerHTML = '<span class="success-message">✅ 2FA успешно включена!</span>';
           input.classList.remove('error');
+          input.disabled = true;
+          btn.disabled = true;
+          btn.innerHTML = '✅ Готово';
           
-          // Можно добавить редирект или дополнительную логику
+          // Можно добавить конфетти или анимацию успеха
           setTimeout(() => {
+            // Опционально: редирект или закрытие окна
             // window.location.href = '/success';
-          }, 1500);
+          }, 2000);
         } else {
           input.classList.add('error');
-          status.innerHTML = '<span class="error-message">❌ Неверный код. Попробуйте снова</span>';
+          const errorMsg = result.error || 'Неверный код. Попробуйте снова';
+          status.innerHTML = '<span class="error-message">❌ ' + errorMsg + '</span>';
+          btn.disabled = false;
+          btn.innerHTML = 'Установить 2FA';
         }
       } catch (error) {
-        status.innerHTML = '<span class="error-message">❌ Ошибка проверки. Попробуйте позже</span>';
-        console.error('Verification error:', error);
-      } finally {
+        status.innerHTML = '<span class="error-message">❌ Ошибка соединения. Попробуйте позже</span>';
+        console.error('Enable 2FA error:', error);
         btn.disabled = false;
-        btn.innerHTML = 'Проверить';
+        btn.innerHTML = 'Установить 2FA';
       }
     }
     
@@ -461,7 +564,7 @@ function createSuccessPage(key: string): Response {
     // Обработка Enter
     document.getElementById('verificationCode').addEventListener('keypress', function(e) {
       if (e.key === 'Enter') {
-        verifyCode();
+        enable2FA();
       }
     });
   </script>
