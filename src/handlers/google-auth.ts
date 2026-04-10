@@ -11,7 +11,12 @@ export async function googleAuthenticatorHandler(request: Request): Promise<Resp
 
   try {
     const url = new URL(request.url);
-    let token = url.searchParams.get("token");
+    
+    // ВАЖНО: Получаем сырой query string и извлекаем токен вручную
+    // чтобы избежать автоматического декодирования URL
+    const rawQueryString = request.url.split('?')[1] || '';
+    const tokenMatch = rawQueryString.match(/token=([^&]*)/);
+    let token = tokenMatch ? tokenMatch[1] : null;
 
     if (!token) {
       return new Response("Ошибка: token не передан", { status: 400 });
@@ -19,13 +24,17 @@ export async function googleAuthenticatorHandler(request: Request): Promise<Resp
 
     debugInfo.tokenLength = token.length;
 
-    // Важно: используем правильное кодирование
+    // Декодируем токен только один раз, сохраняя все символы
+    token = decodeURIComponent(token);
+    
+    // Кодируем заново для передачи в API
     const apiUrl = `https://api-test.free2ex.com/v3/Identity/GoogleAuthenticator?sendNotification=false&token=${encodeURIComponent(token)}`;
 
     debugInfo.apiUrl = apiUrl;
 
     console.log("=== ЗАПРОС К API ===");
     console.log("Token length:", token.length);
+    console.log("Original token preview:", token.substring(0, 50) + "...");
     console.log("URL:", apiUrl);
     console.log("=====================");
 
