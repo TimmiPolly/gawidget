@@ -1,32 +1,47 @@
-import { helloHandler } from './handlers/hello';
-import { googleAuthenticatorHandler } from './handlers/google-auth';
+import { googleAuthenticatorHandler } from './handlers/google-authenticator';
+import { enable2FAHandler } from './handlers/enable-2fa';
 
-export const router = {
-  async fetch(
-    request: Request,
-    env: Env,
-    ctx: ExecutionContext
-  ): Promise<Response> {
+export default {
+  async fetch(request: Request, env: any, ctx: any): Promise<Response> {
     const url = new URL(request.url);
-    const path = url.pathname.toLowerCase();
-
-    if (path === "/hello") {
-      return helloHandler(request, env, ctx);
+    
+    console.log(`${request.method} ${url.pathname}`);
+    
+    // Обработка CORS preflight
+    if (request.method === 'OPTIONS') {
+      return handleCORS();
     }
-
-    if (path === "/googleauthenticator" || path === "/google-authenticator") {
-      return googleAuthenticatorHandler(request, env, ctx);
+    
+    // Роутинг
+    if (url.pathname === '/GoogleAuthenticator' && request.method === 'GET') {
+      return googleAuthenticatorHandler(request);
     }
-
-    if (path === "/" || path === "") {
-      return new Response("Worker is running ✅", {
-        headers: { "Content-Type": "text/plain; charset=utf-8" },
+    
+    if (url.pathname === '/enable-2fa' && request.method === 'POST') {
+      return enable2FAHandler(request);
+    }
+    
+    // Корневой путь
+    if (url.pathname === '/') {
+      return new Response('Worker is running. Available endpoints: GET /GoogleAuthenticator, POST /enable-2fa', {
+        status: 200,
+        headers: { 'Content-Type': 'text/plain' }
       });
     }
-
-    return new Response("Not found", { 
-      status: 404,
-      headers: { "Content-Type": "text/plain; charset=utf-8" }
-    });
-  },
+    
+    // 404
+    return new Response('Not Found', { status: 404 });
+  }
 };
+
+function handleCORS(): Response {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Max-Age': '86400'
+    }
+  });
+}
