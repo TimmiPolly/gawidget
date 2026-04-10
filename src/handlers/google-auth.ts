@@ -1,77 +1,61 @@
 export async function googleAuthenticatorHandler(request: Request): Promise<Response> {
   let debugInfo = {
-    requestUrl: "",
+    requestUrl: request.url,
+    tokenLength: 0,
     apiUrl: "",
     status: null as number | null,
     statusText: "",
     error: "",
-    responseBody: ""
+    rawResponse: ""
   };
 
   try {
     const url = new URL(request.url);
-    const token = url.searchParams.get("token");
+    let token = url.searchParams.get("token");
 
     if (!token) {
       return new Response("Ошибка: token не передан", { status: 400 });
     }
 
+    debugInfo.tokenLength = token.length;
+
+    // Важно: используем правильное кодирование
     const apiUrl = `https://api-test.free2ex.com/v3/Identity/GoogleAuthenticator?sendNotification=false&token=${encodeURIComponent(token)}`;
 
-    debugInfo.requestUrl = request.url;
     debugInfo.apiUrl = apiUrl;
 
-    const fetchOptions = {
+    console.log("=== ЗАПРОС К API ===");
+    console.log("Token length:", token.length);
+    console.log("URL:", apiUrl);
+    console.log("=====================");
+
+    const response = await fetch(apiUrl, {
       method: "GET",
       headers: {
         "Accept": "application/json",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Cache-Control": "no-cache",
       },
-    };
-
-    // Логи в терминал
-    console.log("=== ЗАПРОС К API ===");
-    console.log("URL:", apiUrl);
-    console.log("Headers:", fetchOptions.headers);
-    console.log("=====================");
-
-    const response = await fetch(apiUrl, fetchOptions);
+    });
 
     debugInfo.status = response.status;
     debugInfo.statusText = response.statusText;
 
-    console.log("=== ОТВЕТ ОТ API ===");
-    console.log("Status:", response.status, response.statusText);
-    console.log("=====================");
-
     if (!response.ok) {
-      const errorBody = await response.text();
-      debugInfo.error = errorBody;
-      console.error("Тело ошибки:", errorBody);
-
-      return createDebugPage(debugInfo, true);
+      const errorText = await response.text();
+      debugInfo.error = errorText;
+      console.error("Ошибка API:", errorText);
+      return createDebugPage(debugInfo);
     }
 
     const data = await response.json() as any;
-    debugInfo.responseBody = JSON.stringify(data, null, 2);
-
-    if (!data?.key) {
-      debugInfo.error = "Ключ не найден в ответе";
-      return createDebugPage(debugInfo, true);
-    }
-
-    // Успешный ответ — показываем красивую страницу
-    return createSuccessPage(data.key);
+    return createSuccessPage(data.key || "Ключ не получен");
 
   } catch (err: any) {
     debugInfo.error = err.message || String(err);
-    console.error("Критическая ошибка:", err);
-    return createDebugPage(debugInfo, true);
+    console.error(err);
+    return createDebugPage(debugInfo);
   }
 }
-
-// ========== Вспомогательные функции ==========
 
 function createSuccessPage(key: string): Response {
   const html = `
