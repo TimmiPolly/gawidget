@@ -1,4 +1,6 @@
-export async function enable2FAHandler(request: Request): Promise<Response> {
+import { Env } from '../router';
+
+export async function enable2FAHandler(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   try {
     const body = await request.json() as { code: string; token: string };
     const { code, token } = body;
@@ -14,7 +16,10 @@ export async function enable2FAHandler(request: Request): Promise<Response> {
         error: 'Код должен содержать 6 цифр'
       }), {
         status: 400,
-        headers: corsHeaders()
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
       });
     }
     
@@ -24,8 +29,24 @@ export async function enable2FAHandler(request: Request): Promise<Response> {
         error: 'Токен не передан'
       }), {
         status: 400,
-        headers: corsHeaders()
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
       });
+    }
+    
+    // Здесь можно использовать KV для временного хранения или логирования
+    if (env.MY_KV) {
+      try {
+        await env.MY_KV.put(`2fa-attempt-${Date.now()}`, JSON.stringify({
+          code,
+          tokenPreview: token.substring(0, 20) + '...',
+          timestamp: new Date().toISOString()
+        }), { expirationTtl: 3600 }); // Храним 1 час
+      } catch (kvError) {
+        console.warn('KV storage error:', kvError);
+      }
     }
     
     // Запрос к API партнера
@@ -63,12 +84,28 @@ export async function enable2FAHandler(request: Request): Promise<Response> {
     
     if (response.status === 200) {
       console.log('2FA enabled successfully');
+      
+      // Сохраняем успешную активацию в KV
+      if (env.MY_KV) {
+        try {
+          await env.MY_KV.put(`2fa-success-${Date.now()}`, JSON.stringify({
+            timestamp: new Date().toISOString(),
+            success: true
+          }), { expirationTtl: 86400 }); // Храним 24 часа
+        } catch (kvError) {
+          console.warn('KV storage error:', kvError);
+        }
+      }
+      
       return new Response(JSON.stringify({
         success: true,
         message: '2FA успешно включена!'
       }), {
         status: 200,
-        headers: corsHeaders()
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
       });
     } else {
       console.error('Partner API error:', responseData);
@@ -78,7 +115,10 @@ export async function enable2FAHandler(request: Request): Promise<Response> {
         details: responseData
       }), {
         status: response.status,
-        headers: corsHeaders()
+        headers: { 
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
       });
     }
     
@@ -89,16 +129,10 @@ export async function enable2FAHandler(request: Request): Promise<Response> {
       error: error.message || 'Внутренняя ошибка сервера'
     }), {
       status: 500,
-      headers: corsHeaders()
+      headers: { 
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      }
     });
   }
-}
-
-function corsHeaders(): HeadersInit {
-  return {
-    'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type'
-  };
 }
