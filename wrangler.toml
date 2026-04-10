@@ -1,18 +1,17 @@
-name = "gawidget"
+name = "gawidget"   # ← Измени на то, что ожидает CI!
 
 main = "src/index.ts"
-compatibility_date = "2026-04-08"
+compatibility_date = "2026-04-10"   # обязательно свежая дата
 compatibility_flags = ["nodejs_compat"]
 
-# KV Namespace для production
+# KV для production
 [[kv_namespaces]]
 binding = "MY_KV"
-id = "ваш_production_kv_id"     # ← замени
+id = "твой_production_kv_id"
 
-# Test environment
 [env.test]
-name = "gawidget-test"
+name = "gawidget-test"   # или api-test, как хочешь
 
 [[env.test.kv_namespaces]]
 binding = "MY_KV"
-id = "ваш_test_kv_id"           # ← замени на другой KV
+id = "твой_test_kv_id"
