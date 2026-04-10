@@ -1,0 +1,14 @@
+{
+  "name": "api",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "deploy:test": "wrangler deploy --env test",
+    "dev": "wrangler dev",
+    "type-check": "wrangler types"   // если используешь TS
+  },
+  "devDependencies": {
+    "wrangler": "^3.100.0"   // или новее
+  }
+}
