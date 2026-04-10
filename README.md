@@ -119,5 +119,4 @@ src/
 
 MIT
 ```
-<img width="750" height="799" alt="image" src="https://github.com/user-attachments/assets/76562704-31c7-4ae2-a71f-a9c6a9bd53dd" />
 
