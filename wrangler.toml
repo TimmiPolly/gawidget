@@ -15,6 +15,3 @@ name = "gawidget-test"   # или api-test, как хочешь
 [[env.test.kv_namespaces]]
 binding = "myVar"
 id = "01f999166da04c68a9a10b4e33cc132d"
-
-[build.upload]
-format = "modules"
