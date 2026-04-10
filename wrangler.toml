@@ -11,7 +11,7 @@ id = "ваш_production_kv_id"     # ← замени
 
 # Test environment
 [env.test]
-name = "api-test"
+name = "gawidget-test"
 
 [[env.test.kv_namespaces]]
 binding = "MY_KV"
