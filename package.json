@@ -3,12 +3,14 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "deploy:test": "wrangler deploy --env test",
-    "dev": "wrangler dev",
-    "type-check": "wrangler types"   // если используешь TS
+    "type-check": "tsc --noEmit"
   },
   "devDependencies": {
-    "wrangler": "^3.100.0"   // или новее
+    "@cloudflare/workers-types": "^4.20250407.0",
+    "typescript": "^5.8.0",
+    "wrangler": "^3.100.0"
   }
 }
