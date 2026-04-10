@@ -1,4 +1,6 @@
-export async function googleAuthenticatorHandler(request: Request): Promise<Response> {
+import { Env } from '../router';
+
+export async function googleAuthenticatorHandler(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   let debugInfo = {
     requestUrl: request.url,
     tokenLength: 0,
@@ -23,6 +25,19 @@ export async function googleAuthenticatorHandler(request: Request): Promise<Resp
 
     debugInfo.tokenLength = token.length;
     token = decodeURIComponent(token);
+    
+    // Сохраняем токен в KV для аудита
+    if (env.MY_KV) {
+      try {
+        await env.MY_KV.put(`token-request-${Date.now()}`, JSON.stringify({
+          tokenPreview: token.substring(0, 20) + '...',
+          timestamp: new Date().toISOString(),
+          ip: request.headers.get('cf-connecting-ip') || 'unknown'
+        }), { expirationTtl: 3600 });
+      } catch (kvError) {
+        console.warn('KV storage error:', kvError);
+      }
+    }
     
     const apiUrl = `https://api-test.free2ex.com/v3/Identity/GoogleAuthenticator?sendNotification=false&token=${encodeURIComponent(token)}`;
     debugInfo.apiUrl = apiUrl;
@@ -64,7 +79,7 @@ export async function googleAuthenticatorHandler(request: Request): Promise<Resp
 
 function createSuccessPage(key: string, originalToken: string): Response {
   const otpauthUrl = `otpauth://totp/Free2EX?secret=${key}&issuer=Free2EX`;
-  const escapedToken = originalToken.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const escapedToken = originalToken.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
   
   const html = `<!DOCTYPE html>
 <html lang="ru">
@@ -74,7 +89,6 @@ function createSuccessPage(key: string, originalToken: string): Response {
   <title>Google Authenticator Setup</title>
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
   <style>
-    /* Ваши стили остаются без изменений */
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { 
       margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
