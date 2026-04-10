@@ -6,12 +6,12 @@ compatibility_flags = ["nodejs_compat"]
 
 # KV для production
 [[kv_namespaces]]
-binding = "MY_KV"
-id = "твой_production_kv_id"
+binding = "myVar"
+id = "01f999166da04c68a9a10b4e33cc132d"
 
 [env.test]
 name = "gawidget-test"   # или api-test, как хочешь
 
 [[env.test.kv_namespaces]]
-binding = "MY_KV"
-id = "твой_test_kv_id"
+binding = "myVar"
+id = "01f999166da04c68a9a10b4e33cc132d"
